@@ -1,0 +1,3 @@
+type: custom:tryon-solar-tracker-card
+entity: sensor.solar_array_4_actual_solar_angle
+show_controls: true

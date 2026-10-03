@@ -1,0 +1,101 @@
+# Tryon Solar Tracker Card
+
+A Home Assistant dashboard card for Tryon solar trackers. Select one **Actual Solar Angle** entity to discover the readings and controls on that same device. Uses the existing **ESPHome integration**; MQTT is not required for this card.
+
+![Solar tracker daytime card](docs/screenshots/day.png)
+
+The graphics match [Tryon Electronics' live tracker demo](https://tryonelectronics.com/projects/solar-tracker-demo): blue panel cells, gold frame, sun reflection, pedestal, glowing rings, seasonal sun path, a nighttime moon, and a 0° flat / 90° upright gauge. The panel shows the real reported angle. Loading the card does not command movement.
+
+## Install with HACS
+
+Requires Home Assistant **2026.6.0 or newer**, HACS, and tracker entities available in Home Assistant. No button-card, Mushroom or card-mod dependencies.
+
+1. Open **HACS → three-dot menu → Custom repositories**.
+2. Add `https://github.com/Tryon-Electronics/tryon-solar-tracker-card` and select **Dashboard** as the type (older HACS versions call it Lovelace or Plugin).
+3. Find **Tryon Solar Tracker Card** in HACS and select **Download**.
+4. Reload the Home Assistant browser page. In your dashboard, choose **Edit → Add card → Tryon Solar Tracker**.
+5. Select your tracker's **Actual Solar Angle** sensor, such as Solar Array 4. Save. Add another card and select Array 2 to show both.
+
+[Open this repository in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=Tryon-Electronics&repository=tryon-solar-tracker-card&category=plugin)
+
+This is currently a **HACS custom repository**. It is not yet in the default searchable HACS catalog.
+
+HACS installs both the JS module and the landscape image from `dist/`. For normal storage-mode dashboards it also registers the resource. If you use YAML resources or the card is missing from the picker, add this resource once with type **JavaScript module**:
+
+```yaml
+url: /hacsfiles/tryon-solar-tracker-card/tryon-solar-tracker-card.js
+type: module
+```
+
+If upgrading from a manual installation, replace the old `/local/tryon-solar-tracker-card.js` resource with the HACS resource; avoid registering both. Existing card YAML remains valid. Updates are downloaded through HACS, followed by a browser reload.
+
+## Add Solar Array 4
+
+Choose its Actual Solar Angle entity in the visual editor, or use:
+
+```yaml
+type: custom:tryon-solar-tracker-card
+entity: sensor.solar_array_4_actual_solar_angle
+show_controls: true
+controls_expanded: false
+```
+
+Your entity ID may differ if you renamed it. Related entities are discovered by device registry and original name or standard suffix. Ambiguous matches are left unresolved. Expand **Entity overrides (optional)** in the editor to pick missing or renamed readings and controls. When registry access is unavailable, discovery only tries the selected sensor's exact standard prefix.
+
+```yaml
+type: custom:tryon-solar-tracker-card
+entity: sensor.solar_array_4_actual_solar_angle
+title: South Array
+mode: select.renamed_array_4_mode
+stop: button.renamed_array_4_stop
+show_controls: true
+controls_expanded: false
+```
+
+Examples for [Array 2](examples/solar-array-2.yaml) and [Array 4](examples/solar-array-4.yaml) are included. `show_controls: false` hides the controls for a display-only card; Home Assistant user permissions still apply.
+
+## What the card shows
+
+- Actual and requested angles, tracking error and status.
+- Calibration, valid time, fresh wind data and fault indicators.
+- A basic view with a **Controls** button to expand tracking mode, local angle, motor enable, Park Flat and Reset Faults. **STOP PANEL** stays accessible in the basic view.
+- A **Settings** link opens the selected tracker’s Home Assistant device page. Use its ESPHome/device configuration link for calibration, limits and advanced safety setup. MQTT remains an automation input, not the card’s settings store.
+- A daytime countdown to the next flat target and a nighttime **SUN UP IN** countdown. Active safety park/hold and fault status take priority.
+
+Selecting a control sends a real Home Assistant command to that tracker. Missing or unavailable controls are disabled; missing fault data is shown as missing rather than clear. If the actual angle is unavailable, the card does not animate a pretend panel.
+
+The seasonal illustration uses the tracker's saved location, clock, facing and limits. If location or clock readings are absent, it uses Home Assistant's configured location and browser time, marked in the scene. Missing limit/status data and invalid tracker time are called out. The moon is illustrative, not a calculated lunar ephemeris.
+
+![Solar tracker nighttime card](docs/screenshots/night.png)
+
+Screenshots use sample Home Assistant states; the card itself displays live tracker readings. Graphics are served locally with the card, without external image requests.
+
+## Manual installation
+
+Download both files from the release's `dist/` folder into your Home Assistant `config/www/` directory:
+
+- `tryon-solar-tracker-card.js`
+- `solar-landscape-v1.png`
+
+Add `/local/tryon-solar-tracker-card.js?v=0.3.0` as a JavaScript module resource, then reload. Both files must remain together. If you just created `www`, restart Home Assistant once.
+
+## Development and releases
+
+Requires Python 3.10+ and Node.js 22+.
+
+```sh
+npm install --ignore-scripts
+npm run build
+npx playwright install chromium
+npm test
+```
+
+Edit `src/card.js` and run the build to regenerate the self-contained module in `dist/`. The solar helper is scoped to the card. Tests use mocked Home Assistant states and service calls, covering device selection, renamed and ambiguous entities, real angle geometry, seasonal/night behavior, safety status, controls and mobile layout. No tests send commands to hardware.
+
+Before publishing a release, update the version, rebuild and pass CI. Create a GitHub release with a `v` version tag. Keep the JS and PNG together in the tagged `dist/` folder. **Do not attach a standalone JS release asset**: HACS prioritizes it over `dist/`, which would omit the image. HACS downloads the full tagged `dist/` directory.
+
+Report problems through [GitHub Issues](https://github.com/Tryon-Electronics/tryon-solar-tracker-card/issues), including Home Assistant/HACS versions and any unresolved entity names. Never include API keys, passwords or tokens.
+
+## License
+
+[MIT](LICENSE). Copyright 2026 Tryon Electronics.
