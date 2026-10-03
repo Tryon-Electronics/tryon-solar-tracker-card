@@ -1,4 +1,4 @@
-// Tryon Solar Tracker Card v0.3.0. Edit this source and run scripts/build.py.
+// Tryon Solar Tracker Card v0.3.1. Edit this source and run scripts/build.py.
 (() => {
   const landscapeURL = new URL('./solar-landscape-v1.png', import.meta.url).href;
   const solarEnvironment = {};
@@ -126,7 +126,7 @@ const SolarCycle = solarEnvironment.cycle;
   };
   const normalize = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const escape = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const available = state => state && !['unknown','unavailable',''].includes(state.state);
+  const available = state => state && (state.entity_id?.startsWith('button.') ? state.state !== 'unavailable' : !['unknown','unavailable',''].includes(state.state));
   const numeric = state => available(state) && Number.isFinite(Number(state.state)) ? Number(state.state) : null;
   const angle = n => n === null ? '—' : `${n.toFixed(1)}°`;
   function resolve(config, hass, registry) {
@@ -136,9 +136,12 @@ const SolarCycle = solarEnvironment.cycle;
     for (const [role, [domain, suffix, name]] of Object.entries(ROLES)) {
       if (config[role]) { ids[role] = config[role]; continue; }
       if (anchor?.device_id) {
-        const candidates = registry.filter(e => e.device_id === anchor.device_id && !e.disabled_by &&
-          e.entity_id.startsWith(domain + '.') &&
-          (normalize(e.original_name) === normalize(name) || e.entity_id.endsWith('_' + suffix)));
+        const sameDevice = registry.filter(e => e.device_id === anchor.device_id && !e.disabled_by && e.entity_id.startsWith(domain + '.'));
+        // Local original names outrank suffix matches from ESP-NOW peer telemetry.
+        const exactName = sameDevice.filter(e => normalize(e.original_name) === normalize(name));
+        const exactId = sameDevice.filter(e => prefix && e.entity_id === `${domain}.${prefix}_${suffix}`);
+        const suffixMatches = sameDevice.filter(e => !normalize(e.original_name).includes('espnow') && !normalize(e.entity_id).includes('espnow') && e.entity_id.endsWith('_' + suffix));
+        const candidates = exactName.length ? exactName : exactId.length ? exactId : suffixMatches;
         // Ambiguous entities require an explicit selection; never choose another array.
         if (candidates.length === 1) ids[role] = candidates[0].entity_id;
       } else if (prefix) {
@@ -205,7 +208,10 @@ const SolarCycle = solarEnvironment.cycle;
       const mode = this._state('mode');
       const faults = ['motor_fault','angle_fault','wrong_fault','no_move_fault'];
       const fault = faults.some(role => this._state(role)?.state === 'on');
-      const missing = ['requested','mode','motor_enable',...faults].filter(role => !this._enabled(role));
+      // Disabled-by-default detailed diagnostics are optional; Motor Fault covers both.
+      const required = ['requested','mode','motor_enable','motor_fault','angle_fault'];
+      const optionalDiagnostics = ['wrong_fault','no_move_fault'].filter(role => this._ids[role] || this._config[role]);
+      const missing = [...required,...optionalDiagnostics].filter(role => !this._enabled(role));
       const status = actual === null ? 'ANGLE UNAVAILABLE' : fault ? 'FAULT — CHECK TRACKER' :
         this._state('motor_enable')?.state === 'off' ? 'MOTOR DISABLED' :
         available(this._state('status')) ? this._state('status').state : 'STATUS UNAVAILABLE';
@@ -275,7 +281,8 @@ const SolarCycle = solarEnvironment.cycle;
       const fault=['motor_fault','angle_fault','wrong_fault','no_move_fault'].some(role=>this._state(role)?.state==='on');
       const timeInvalid=this._state('time_valid')?.state==='off';
       const options={mode,fault,safety:this._state('safety_park')?.state==='on',disabled:this._state('motor_enable')?.state==='off',flat:actual<=minimum+.75};
-      const missingStatus=['mode','motor_enable','motor_fault','angle_fault','wrong_fault','no_move_fault'].some(role=>!this._enabled(role));
+      const statusRoles=['mode','motor_enable','motor_fault','angle_fault',...['wrong_fault','no_move_fault'].filter(role=>this._ids[role]||this._config[role])];
+      const missingStatus=statusRoles.some(role=>!this._enabled(role));
       const missingLimits=['facing','minimum','maximum'].some(role=>n(role)===null);
       const countdown=options.fault||options.safety?SolarCycle.label(ms,schedule,options):missingStatus?'CHECK TRACKER STATUS':timeInvalid?'CHECK TRACKER TIME':missingLimits?'COUNTDOWN · CHECK SITE / LIMITS':SolarCycle.label(ms,schedule,options);
       const estimateSource=[!hasSite?'HA LOCATION':null,epoch===null?'BROWSER TIME':null].filter(Boolean).join(' / ');

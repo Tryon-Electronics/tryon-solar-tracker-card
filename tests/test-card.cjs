@@ -21,6 +21,14 @@ const { chromium } = require('playwright');
       const roles=[['sensor','actual_solar_angle','Actual Solar Angle','35'],['sensor','requested_solar_angle','Requested Solar Angle','42'],['sensor','tracking_error','Tracking Error','7'],['sensor','tracking_status','Tracking Status','AUTO SUN - TRACKING'],['select','tracking_mode','Tracking Mode','Auto Sun',{options:['Auto Sun','Local Angle','Park Flat']}],['number','local_requested_angle','Local Requested Angle','25',{min:0,max:84,step:.1}],['switch','motor_enable','Motor Enable','on'],['button','reset_motor_fault','Reset Motor Fault','2026-10-02'],['button','stop_panel','Stop Panel','2026-10-02'],...['Motor Fault','Angle Sensor Fault','Wrong Direction Fault','No Movement Fault','Panel Calibrated','Time Valid','Wind Data Fresh','Panel At Target'].map(name=>['binary_sensor',name.toLowerCase().replaceAll(' ','_'),name,name.includes('Fault')?'off':'on'])];
       roles.push(['number','site_latitude','Site Latitude','40'],['number','site_longitude','Site Longitude','-100'],['number','panel_facing_azimuth','Panel Facing Azimuth','180'],['number','panel_minimum_angle','Panel Minimum Angle','1.5'],['number','panel_maximum_angle','Panel Maximum Angle','84'],['sensor','tracker_epoch','Tracker Epoch',String(Date.parse('2026-06-21T17:00:00Z')/1000)],['sensor','sun_elevation','Sun Elevation','70'],['sensor','sun_azimuth','Sun Azimuth','160'],['binary_sensor','safety_bus_park_active','Safety Bus Park Active','off']);
       for(const device of ['2','4'])for(const [domain,suffix,name,state,attributes] of roles)add(`${domain}.solar_array_${device}_${suffix}`,device,name,state,attributes);
+      // A controller also exposes peer telemetry, with the same suffixes as local readings.
+      for(const peer of ['1','2','3'])for(const [suffix,name] of [['motor_fault','Motor Fault'],['panel_calibrated','Panel Calibrated'],['wind_data_fresh','Wind Data Fresh']])add(`binary_sensor.solar_array_4_esp_now_array_${peer}_${suffix}`,'4',`ESP-NOW Array ${peer} ${name}`,'off');
+      // Button state is unknown before its first press, but it remains actionable.
+      states['button.solar_array_4_stop_panel'].state='unknown';
+      for(const suffix of ['wrong_direction_fault','no_movement_fault']) {
+        const id=`binary_sensor.solar_array_4_${suffix}`;
+        registry.find(e=>e.entity_id===id).disabled_by='integration';delete states[id];
+      }
       // Renamed control is discovered through its original name on the same device.
       const old='select.solar_array_4_tracking_mode',renamed='select.south_array_mode';
       states[renamed]={...states[old],entity_id:renamed};delete states[old];registry.find(e=>e.entity_id===old).entity_id=renamed;
@@ -30,6 +38,10 @@ const { chromium } = require('playwright');
     });
     assert.equal(await page.evaluate(()=>calls.length),0,'loading sends no movement commands');
     assert.equal(await page.locator('.controls').count(),0,'basic view starts with controls collapsed');
+    assert.equal(await page.locator('.warning').count(),0,'disabled optional diagnostics do not warn');
+    assert((await page.locator('.flags').innerText()).includes('Calibrated: yes'),'local calibrated reading wins over peer telemetry');
+    assert((await page.locator('.flags').innerText()).includes('Wind fresh: yes'),'local wind reading wins over peer telemetry');
+    assert.equal(await page.evaluate(()=>card._ids.motor_fault),'binary_sensor.solar_array_4_motor_fault');
     assert.equal(await page.locator('[data-action="settings"]').getAttribute('href'),'/config/devices/device/4');
     assert(await page.locator('[data-action="stop"]').isEnabled(),'STOP is accessible in basic view');
     await page.locator('[data-action="toggle-controls"]').click();

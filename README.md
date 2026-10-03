@@ -62,7 +62,7 @@ Examples for [Array 2](examples/solar-array-2.yaml) and [Array 4](examples/solar
 - A **Settings** link opens the selected tracker’s Home Assistant device page. Use its ESPHome/device configuration link for calibration, limits and advanced safety setup. MQTT remains an automation input, not the card’s settings store.
 - A daytime countdown to the next flat target and a nighttime **SUN UP IN** countdown. Active safety park/hold and fault status take priority.
 
-Selecting a control sends a real Home Assistant command to that tracker. Missing or unavailable controls are disabled; missing fault data is shown as missing rather than clear. If the actual angle is unavailable, the card does not animate a pretend panel.
+Selecting a control sends a real Home Assistant command to that tracker. Unavailable controls are disabled; button states of `unknown` before their first press are normal and remain actionable; missing required fault data is shown as missing rather than clear. The separate Wrong Direction and No Movement diagnostic entities are optional because firmware disables them by default; Motor Fault already aggregates both. Enable the detailed entities on the ESPHome device page if you want their separate indicators. If the actual angle is unavailable, the card does not animate a pretend panel.
 
 The seasonal illustration uses the tracker's saved location, clock, facing and limits. If location or clock readings are absent, it uses Home Assistant's configured location and browser time, marked in the scene. Missing limit/status data and invalid tracker time are called out. The moon is illustrative, not a calculated lunar ephemeris.
 
@@ -77,7 +77,7 @@ Download both files from the release's `dist/` folder into your Home Assistant `
 - `tryon-solar-tracker-card.js`
 - `solar-landscape-v1.png`
 
-Add `/local/tryon-solar-tracker-card.js?v=0.3.0` as a JavaScript module resource, then reload. Both files must remain together. If you just created `www`, restart Home Assistant once.
+Add `/local/tryon-solar-tracker-card.js?v=0.3.1` as a JavaScript module resource, then reload. Both files must remain together. If you just created `www`, restart Home Assistant once.
 
 ## Development and releases
 
