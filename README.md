@@ -60,11 +60,11 @@ Examples for [Array 2](examples/solar-array-2.yaml) and [Array 4](examples/solar
 - Calibration, valid time, fresh wind data and fault indicators.
 - A basic view with a **Controls** button to expand tracking mode, local angle, motor enable, Park Flat and Reset Faults. **STOP PANEL** stays accessible in the basic view.
 - A **Settings** link opens the selected tracker’s Home Assistant device page. Use its ESPHome/device configuration link for calibration, limits and advanced safety setup. MQTT remains an automation input, not the card’s settings store.
-- A daytime countdown to the next flat target and a nighttime **SUN UP IN** countdown. Active safety park/hold and fault status take priority.
+- A daytime **SUN DOWN IN** countdown to sunset and a nighttime **SUN UP IN** countdown to sunrise. The timer updates once per second without redrawing the scene. Faults and safety holds remain visible in the status header.
 
 Selecting a control sends a real Home Assistant command to that tracker. Unavailable controls are disabled; button states of `unknown` before their first press are normal and remain actionable; missing required fault data is shown as missing rather than clear. The separate Wrong Direction and No Movement diagnostic entities are optional because firmware disables them by default; Motor Fault already aggregates both. Enable the detailed entities on the ESPHome device page if you want their separate indicators. If the actual angle is unavailable, the card does not animate a pretend panel.
 
-The seasonal illustration uses the tracker's saved location, clock, facing and limits. If location or clock readings are absent, it uses Home Assistant's configured location and browser time, marked in the scene. Missing limit/status data and invalid tracker time are called out. The moon is illustrative, not a calculated lunar ephemeris.
+The seasonal illustration uses the tracker's saved location, clock, facing and limits. If location or clock readings are absent, it uses Home Assistant's configured location and browser time, marked in the scene. Sun timing does not require the optional angle-limit settings. If tracker location is unavailable, sunrise/sunset times come from Home Assistant’s `sun.sun` entity or configured location. Missing required status entities remain called out. The moon is illustrative, not a calculated lunar ephemeris.
 
 ![Solar tracker nighttime card](docs/screenshots/night.png)
 
@@ -74,7 +74,7 @@ Screenshots use sample Home Assistant states; the card itself displays live trac
 
 Download `dist/tryon-solar-tracker-card.js` into your Home Assistant `config/www/` directory.
 
-Add `/local/tryon-solar-tracker-card.js?v=0.4.0` as a JavaScript module resource, then reload. If you just created `www`, restart Home Assistant once.
+Add `/local/tryon-solar-tracker-card.js?v=0.4.1` as a JavaScript module resource, then reload. If you just created `www`, restart Home Assistant once.
 
 ## Development and releases
 

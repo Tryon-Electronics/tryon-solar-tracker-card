@@ -1,4 +1,4 @@
-// Tryon Solar Tracker Card v0.4.0. Edit this source and run scripts/build.py.
+// Tryon Solar Tracker Card v0.4.1. Edit this source and run scripts/build.py.
 (() => {
   /* SOLAR_CYCLE_HELPER */
   const ROLES = {
@@ -82,6 +82,44 @@
       this.shadowRoot.addEventListener('change',e=>this._handleAction(e));
       this.shadowRoot.addEventListener('focusout',()=>queueMicrotask(()=>{this._signature='';this._render();}));
     }
+    connectedCallback() {
+      if(!this._timer)this._timer=setInterval(()=>{if(!document.hidden)this._tickCountdown();},1000);
+    }
+    disconnectedCallback() { clearInterval(this._timer);this._timer=null; }
+    _trackerNow() {
+      const epoch=numeric(this._state('epoch'));
+      if(epoch===null || epoch<=0)return Date.now();
+      if(this._clockEpoch!==epoch){this._clockEpoch=epoch;this._clockStart=performance.now();}
+      return epoch*1000+performance.now()-this._clockStart;
+    }
+    _sunCountdown() {
+      if(!this._sunEvent)return 'SUN TIMES · CHECK LOCATION';
+      const now=this._sunEvent.browser?Date.now():this._trackerNow();
+      const seconds=Math.max(0,Math.ceil((this._sunEvent.at-now)/1000));
+      const time=[Math.floor(seconds/3600),Math.floor(seconds/60)%60,seconds%60].map(n=>String(n).padStart(2,'0')).join(':');
+      return `SUN ${this._sunEvent.type} IN ${this._sunEvent.browser?'':'~'}${time}`;
+    }
+    _tickCountdown() {
+      if(!this._hass || !this._ids)return;
+      if(this._sunEvent && this._sunEvent.at<=(this._sunEvent.browser?Date.now():this._trackerNow())) {
+        this._signature='';this._render();
+      }
+      const label=this.shadowRoot.querySelector('.solar-flat-countdown');
+      const text=this._sunCountdown();
+      if(label && label.textContent!==text)label.textContent=text;
+    }
+    _selectSunEvent(ms,schedule,hasSite) {
+      const ha=this._hass.states['sun.sun']?.attributes;
+      const homeEvents=[['UP',Date.parse(ha?.next_rising)],['DOWN',Date.parse(ha?.next_setting)]]
+        .filter(([,at])=>Number.isFinite(at)&&at>Date.now()).sort((a,b)=>a[1]-b[1]);
+      if(!hasSite && homeEvents.length){this._sunEvent={type:homeEvents[0][0],at:homeEvents[0][1],browser:true};return;}
+      const events=[];
+      for(const day of [schedule,schedule?SolarCycle.schedule(ms+86400000,schedule.lat,schedule.lon):null]) {
+        if(day)for(const [type,at] of [['UP',day.sunrise],['DOWN',day.sunset]])if(Number.isFinite(at)&&at>ms)events.push({type,at,browser:false});
+      }
+      events.sort((a,b)=>a.at-b.at);
+      this._sunEvent=events[0] || (homeEvents.length?{type:homeEvents[0][0],at:homeEvents[0][1],browser:true}:null);
+    }
     setConfig(config) {
       if (config.entity && !config.entity.startsWith('sensor.')) throw new Error('Choose the tracker’s Actual Solar Angle sensor.');
       if (config.entity !== this._config?.entity) this._controlsOpen = config.controls_expanded === true;
@@ -139,6 +177,7 @@
       const optionalDiagnostics = ['wrong_fault','no_move_fault'].filter(role => this._ids[role] || this._config[role]);
       const missing = [...required,...optionalDiagnostics].filter(role => !this._enabled(role));
       const status = actual === null ? 'ANGLE UNAVAILABLE' : fault ? 'FAULT — CHECK TRACKER' :
+        this._state('safety_park')?.state==='on' ? 'SAFETY PARK / HOLD' :
         this._state('motor_enable')?.state === 'off' ? 'MOTOR DISABLED' :
         available(this._state('status')) ? this._state('status').state : 'STATUS UNAVAILABLE';
       const flags = [['calibrated','Calibrated'],['time_valid','Time valid'],['wind_fresh','Wind fresh'],['at_target','At target']];
@@ -199,7 +238,7 @@
       const mid=[project(-170,0,actual),project(170,0,actual)];
       const hasSite=n('latitude')!==null&&n('longitude')!==null;
       const lat=hasSite?n('latitude'):this._hass.config?.latitude,lon=hasSite?n('longitude'):this._hass.config?.longitude;
-      const epoch=n('epoch'),ms=epoch!==null&&epoch>0?epoch*1000:Date.now();
+      const epoch=n('epoch'),ms=this._trackerNow();
       const minimum=n('minimum')??1.5,maximum=n('maximum')??84,facing=n('facing')??180;
       const schedule=SolarCycle.schedule(ms,lat,lon,facing,minimum,maximum);
       const estimate=schedule?SolarCycle.position(ms,lat,lon):null;
@@ -211,13 +250,8 @@
       const x=45+145*progress,y=day?148-100*clamp(elevation,0,90)/90:148-100*night.height/90*4*progress*(1-progress);
       const strength=day?Math.max(0,Math.sin(Math.PI*progress)):0,shine=interpolate(.28,.58);
       const mode=available(this._state('mode'))?this._state('mode').state:'MODE UNAVAILABLE';
-      const fault=['motor_fault','angle_fault','wrong_fault','no_move_fault'].some(role=>this._state(role)?.state==='on');
-      const timeInvalid=this._state('time_valid')?.state==='off';
-      const options={mode,fault,safety:this._state('safety_park')?.state==='on',disabled:this._state('motor_enable')?.state==='off',flat:actual<=minimum+.75};
-      const statusRoles=['mode','motor_enable','motor_fault','angle_fault',...['wrong_fault','no_move_fault'].filter(role=>this._ids[role]||this._config[role])];
-      const missingStatus=statusRoles.some(role=>!this._enabled(role));
-      const missingLimits=['facing','minimum','maximum'].some(role=>n(role)===null);
-      const countdown=options.fault||options.safety?SolarCycle.label(ms,schedule,options):missingStatus?'CHECK TRACKER STATUS':timeInvalid?'CHECK TRACKER TIME':missingLimits?'COUNTDOWN · CHECK SITE / LIMITS':SolarCycle.label(ms,schedule,options);
+      this._selectSunEvent(ms,schedule,hasSite);
+      const countdown=this._sunCountdown();
       const estimateSource=[!hasSite?'HA LOCATION':null,epoch===null?'BROWSER TIME':null].filter(Boolean).join(' / ');
       const path=day?schedule?.path:`M45 148 Q117.5 ${148-200*night.height/90} 190 148`;
       const gauge=a=>{const r=(270-clamp(a,0,90))*Math.PI/180;return [860+96*Math.cos(r),310+96*Math.sin(r)];};
