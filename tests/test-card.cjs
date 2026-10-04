@@ -119,7 +119,7 @@ const { chromium } = require('playwright');
     });
     const timerBefore=await page.locator('.solar-flat-countdown').innerText();
     assert(timerBefore.startsWith('SUN UP IN'),'sunrise works without optional site/limit/epoch sensors');
-    await page.waitForTimeout(1200);
+    await page.waitForFunction(before=>document.querySelector('tryon-solar-tracker-card').shadowRoot.querySelector('.solar-flat-countdown').textContent!==before,timerBefore,{timeout:5000});
     assert.notEqual(await page.locator('.solar-flat-countdown').innerText(),timerBefore,'countdown ticks without HA state updates');
     assert(await page.evaluate(()=>timerPanel===card.shadowRoot.querySelector('.solar-actual-panel')),'timer does not redraw the scene');
     await page.evaluate(()=>{states['sun.sun'].attributes.next_setting=new Date(Date.now()+3600000).toISOString();states['sun.sun'].attributes.next_rising=new Date(Date.now()+43200000).toISOString();card.hass=hass;});
