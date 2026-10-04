@@ -7,8 +7,7 @@ const { chromium } = require('playwright');
   try {
     const page = await browser.newPage({viewport:{width:480,height:1000}});
     const errors=[]; page.on('pageerror',e=>errors.push(e.message));
-    await page.route('http://card.test/**',route=>route.request().url().endsWith('/tryon-solar-tracker-card.js') ? route.fulfill({path:path.join(__dirname,'../dist/tryon-solar-tracker-card.js'),contentType:'text/javascript'}) : route.request().url().endsWith('/solar-landscape-v1.png') ?
-      route.fulfill({path:path.join(__dirname,'../dist/solar-landscape-v1.png'),contentType:'image/png'}) :
+    await page.route('http://card.test/**',route=>route.request().url().endsWith('/tryon-solar-tracker-card.js') ? route.fulfill({path:path.join(__dirname,'../dist/tryon-solar-tracker-card.js'),contentType:'text/javascript'}) :
       route.fulfill({contentType:'text/html',body:'<body style="margin:12px;background:#f0f2ec"><tryon-solar-tracker-card></tryon-solar-tracker-card></body>'}));
     await page.goto('http://card.test/');
     await page.addScriptTag({url:'http://card.test/hacsfiles/tryon-solar-tracker-card/tryon-solar-tracker-card.js',type:'module'});
@@ -46,7 +45,10 @@ const { chromium } = require('playwright');
     assert(await page.locator('[data-action="stop"]').isEnabled(),'STOP is accessible in basic view');
     await page.locator('[data-action="toggle-controls"]').click();
     assert.equal(await page.evaluate(()=>calls.length),0,'opening controls sends no commands');
-    assert.equal(await page.locator('.solar-landscape').getAttribute('href'),'http://card.test/hacsfiles/tryon-solar-tracker-card/solar-landscape-v1.png');
+    assert.equal(await page.locator('svg image').count(),0,'lightweight scene needs no bitmap');
+    assert.equal(await page.locator('.solar-background-grid').count(),1);
+    assert.equal(await page.evaluate(()=>card.shadowRoot.querySelector('style').textContent.includes('infinite')),false,'no continuous animations');
+    await page.evaluate(()=>{window.savedPanel=card.shadowRoot.querySelector('.solar-actual-panel');window.savedSvg=card.shadowRoot.querySelector('svg');});
     assert((await page.locator('.solar-flat-countdown').innerText()).startsWith('FLAT TARGET IN'));
     assert.equal(await page.locator('.solar-cell-texture').count(),1);
     assert.equal(await page.locator('.solar-scene-sun').count(),1);
@@ -56,13 +58,14 @@ const { chromium } = require('playwright');
     await page.evaluate(()=>{states['sensor.solar_array_4_tracker_epoch'].state=String(Date.parse('2026-06-22T04:00:00Z')/1000);states['sensor.solar_array_4_sun_elevation'].state='-16';card.hass=hass});
     assert.equal(await page.locator('.solar-scene-moon').count(),1);
     assert((await page.locator('.solar-flat-countdown').innerText()).startsWith('SUN UP IN'));
-    if(process.env.CARD_NIGHT_SCREENSHOT)await page.screenshot({path:process.env.CARD_NIGHT_SCREENSHOT,fullPage:true});
+    if(process.env.CARD_NIGHT_SCREENSHOT)await page.locator('ha-card').screenshot({path:process.env.CARD_NIGHT_SCREENSHOT});
     await page.evaluate(()=>{states['binary_sensor.solar_array_4_safety_bus_park_active'].state='on';card.hass=hass});
     assert.equal(await page.locator('.solar-flat-countdown').innerText(),'SAFETY PARK / HOLD');
     await page.evaluate(()=>{states['sensor.solar_array_4_tracker_epoch'].state=String(Date.parse('2026-06-21T17:00:00Z')/1000);states['sensor.solar_array_4_sun_elevation'].state='70';states['binary_sensor.solar_array_4_safety_bus_park_active'].state='off';card.hass=hass});
     const actualPoints=await page.locator('.solar-actual-panel').getAttribute('points');
     await page.evaluate(()=>{states['sensor.solar_array_4_actual_solar_angle'].state='65';card.hass=hass});
     assert.notEqual(await page.locator('.solar-actual-panel').getAttribute('points'),actualPoints,'geometry follows reported angle');
+    assert(await page.evaluate(()=>savedPanel===card.shadowRoot.querySelector('.solar-actual-panel')&&savedSvg===card.shadowRoot.querySelector('svg')),'telemetry updates preserve the existing scene');
     await page.evaluate(()=>{states['sensor.solar_array_4_actual_solar_angle'].state='35';card.hass=hass});
     assert((await page.locator('h2').innerText()).includes('Solar Array 4'));
     assert.equal(await page.locator('[data-action="mode"]').inputValue(),'Auto Sun');
@@ -104,7 +107,28 @@ const { chromium } = require('playwright');
     await page.evaluate(()=>{states['binary_sensor.solar_array_4_motor_fault'].state='off';states['sensor.solar_array_4_actual_solar_angle'].state='42';states['sensor.solar_array_4_tracking_error'].state='0';states['sensor.solar_array_4_tracking_status'].state='AUTO SUN - AT TARGET';card._message='';card.hass=hass});
     await page.locator('[data-action="toggle-controls"]').click();
     assert.equal(await page.locator('.controls').count(),0);
-    if(process.env.CARD_SCREENSHOT)await page.screenshot({path:process.env.CARD_SCREENSHOT,fullPage:true});
-    console.log('PASS: website graphics, seasonal path, night countdown, safety override, reported panel geometry, discovery, controls, unavailable states and mobile');
+    if(process.env.CARD_SCREENSHOT)await page.locator('ha-card').screenshot({path:process.env.CARD_SCREENSHOT});
+    await page.evaluate(async()=>{
+      window.fourCards=[card];
+      for(let i=0;i<3;i++) {
+        const extra=document.createElement('tryon-solar-tracker-card');document.body.append(extra);
+        extra.setConfig({entity:`sensor.solar_array_${i%2?'4':'2'}_actual_solar_angle`});extra.hass=hass;fourCards.push(extra);
+      }
+      await Promise.resolve();await Promise.resolve();
+      const panels=fourCards.map(c=>c.shadowRoot.querySelector('.solar-actual-panel'));
+      const before=calls.length;
+      for(let i=0;i<30;i++) {
+        states['sensor.solar_array_2_actual_solar_angle'].state=String(30+i);
+        states['sensor.solar_array_4_actual_solar_angle'].state=String(40+i);
+        states['sensor.solar_array_4_tracker_epoch'].state=String(Number(states['sensor.solar_array_4_tracker_epoch'].state)+2);
+        for(const c of fourCards)c.hass=hass;
+      }
+      window.multiResult={stable:fourCards.every((c,i)=>panels[i]===c.shadowRoot.querySelector('.solar-actual-panel')),commands:calls.length-before};
+    });
+    assert.equal(await page.locator('tryon-solar-tracker-card').count(),4);
+    assert.deepEqual(await page.evaluate(()=>multiResult),{stable:true,commands:0},'four live cards preserve scene nodes without commands');
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'four cards fit a phone viewport');
+    assert.deepEqual(errors,[]);
+    console.log('PASS: lightweight ESP32 graphics, seasonal path, night countdown, safety override, reported panel geometry, discovery, controls, unavailable states and mobile');
   } finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

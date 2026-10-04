@@ -1,8 +1,8 @@
 {
   "name": "tryon-solar-tracker-card",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": true,
-  "description": "Home Assistant solar tracker card with website graphics and ESPHome entity selection",
+  "description": "Home Assistant solar tracker card with lightweight ESP32-style graphics and ESPHome entity selection",
   "scripts": {
     "build": "python scripts/build.py",
     "test": "node tests/test-card.cjs"

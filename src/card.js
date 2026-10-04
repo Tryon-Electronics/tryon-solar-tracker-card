@@ -1,6 +1,5 @@
-// Tryon Solar Tracker Card v0.3.1. Edit this source and run scripts/build.py.
+// Tryon Solar Tracker Card v0.4.0. Edit this source and run scripts/build.py.
 (() => {
-  const landscapeURL = new URL('./solar-landscape-v1.png', import.meta.url).href;
   /* SOLAR_CYCLE_HELPER */
   const ROLES = {
     requested: ['sensor', 'requested_solar_angle', 'Requested Solar Angle'],
@@ -56,10 +55,31 @@
     }
     return ids;
   }
+  // Keep existing SVG and control nodes alive; change only text and attributes.
+  function patchChildren(parent, desired) {
+    for (let i=0; i<desired.childNodes.length; i++) {
+      const next=desired.childNodes[i], current=parent.childNodes[i];
+      if (!current) { parent.appendChild(next.cloneNode(true)); continue; }
+      if (current.nodeType!==next.nodeType || current.nodeName!==next.nodeName) {
+        parent.replaceChild(next.cloneNode(true),current); continue;
+      }
+      if (current.nodeType!==Node.ELEMENT_NODE) {
+        if(current.nodeValue!==next.nodeValue)current.nodeValue=next.nodeValue;
+        continue;
+      }
+      for(const attr of [...current.attributes])if(!next.hasAttribute(attr.name))current.removeAttribute(attr.name);
+      for(const attr of next.attributes)if(current.getAttribute(attr.name)!==attr.value)current.setAttribute(attr.name,attr.value);
+      patchChildren(current,next);
+      if(['INPUT','SELECT'].includes(current.tagName) && current.value!==next.value)current.value=next.value;
+    }
+    while(parent.childNodes.length>desired.childNodes.length)parent.lastChild.remove();
+  }
   class TryonSolarTrackerCard extends HTMLElement {
     constructor() {
       super(); this.attachShadow({mode:'open'}); this._registry = null; this._pending = false;
       this._signature = ''; this._busy = false; this._controlsOpen = false;
+      this.shadowRoot.addEventListener('click',e=>this._handleAction(e));
+      this.shadowRoot.addEventListener('change',e=>this._handleAction(e));
       this.shadowRoot.addEventListener('focusout',()=>queueMicrotask(()=>{this._signature='';this._render();}));
     }
     setConfig(config) {
@@ -103,7 +123,8 @@
       if (!this._busy && ['INPUT','SELECT'].includes(this.shadowRoot.activeElement?.tagName)) return;
       this._ids = resolve(this._config, this._hass, this._registry);
       const signature = JSON.stringify([this._config, this._ids, this._busy, this._message, this._controlsOpen,
-        ...Object.values(this._ids).map(id => this._hass.states[id]), this._hass.states['sun.sun']]);
+        ...Object.values(this._ids).map(id => {const s=this._hass.states[id];return s?[id,s.state,s.attributes]:null;}),
+        [this._hass.states['sun.sun']?.state,this._hass.states['sun.sun']?.attributes]]);
       if (signature === this._signature) return;
       this._signature = signature;
       const deviceId = this._registry?.find(e => e.entity_id === this._config.entity)?.device_id;
@@ -121,13 +142,12 @@
         this._state('motor_enable')?.state === 'off' ? 'MOTOR DISABLED' :
         available(this._state('status')) ? this._state('status').state : 'STATUS UNAVAILABLE';
       const flags = [['calibrated','Calibrated'],['time_valid','Time valid'],['wind_fresh','Wind fresh'],['at_target','At target']];
-      this.shadowRoot.innerHTML = `<style>
+      const html = `<style>
         :host{display:block}*{box-sizing:border-box}ha-card{display:block;padding:18px;border-radius:22px;background:linear-gradient(145deg,#14261b,#07100b);color:#eef8ed;font-family:var(--primary-font-family,system-ui)}
         header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:18px}h2{font-size:20px;margin:0}.status{padding:7px 10px;border:1px solid #4b6c3e;border-radius:12px;font-size:11px;max-width:100%;overflow-wrap:anywhere}.fault{border-color:#db5b44;background:#522219}
         .scene{position:relative;background:linear-gradient(#09212a,#07150d);border:1px solid #294d35;border-radius:18px;overflow:hidden}.scene svg{display:block;width:100%;height:auto}.metrics,.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}.metric,.control{padding:12px;border:1px solid #34513c;border-radius:14px;background:#16271c}.metric span,label{display:block;font-size:12px;color:#c2d6c5}.metric strong{display:block;font-size:22px;margin-top:5px}.flags{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}.flags span{padding:5px 8px;border-radius:10px;background:#223425;font-size:11px}.flags .off{color:#ffcf7f}
         .solar-flat-countdown{position:absolute;right:12px;top:36px;max-width:55%;padding:4px 7px;border:1px solid #496438;border-radius:7px;background:#06140de6;color:#f8d77d;font:700 10px/1.3 system-ui;text-align:right;pointer-events:none}
-        .solar-ground-rings{filter:drop-shadow(0 0 6px #55ed36)}.solar-ring-orbit{animation:solar-ring-flow 6s linear infinite}.solar-pedestal{filter:drop-shadow(0 5px 9px #000)}.solar-panel-gleam{filter:drop-shadow(0 0 6px #ffe585)}.solar-scene-sun{filter:drop-shadow(0 0 9px #fff49d) drop-shadow(0 0 22px #ffc229)}.solar-scene-moon{filter:drop-shadow(0 0 8px #cce5f659)}.solar-orbit-path{filter:drop-shadow(0 0 4px #ffd659)}.solar-light-beam{fill:#ffdc6526}.solar-light-ray{fill:none;stroke:#fff1acda;stroke-width:2.5;stroke-dasharray:7 12;filter:drop-shadow(0 0 4px #ffd45f);animation:solar-ray-flow 2s linear infinite}.solar-panel-bevel{filter:drop-shadow(0 0 2px #e4c460)}.solar-angle-gauge{filter:drop-shadow(0 0 4px #54e938)}
-        @keyframes solar-ring-flow{to{stroke-dashoffset:-410}}@keyframes solar-ray-flow{to{stroke-dashoffset:-38}}@media(prefers-reduced-motion:reduce){.solar-ring-orbit,.solar-light-ray{animation:none}}
+        .solar-light-beam{fill:#ffdc6518}.solar-light-ray{fill:none;stroke:#fff1ac99;stroke-width:2;stroke-dasharray:7 12}
         button,select,input{font:inherit;min-height:44px;border:1px solid #57764e;border-radius:10px;color:#eef8ed;background:#203725;padding:8px;width:100%;margin-top:7px}button{cursor:pointer}button:disabled,select:disabled,input:disabled{opacity:.45;cursor:default}.toolbar{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}.toolbar button,.toolbar a{width:auto;flex:1;margin:0;font-size:13px}.toolbar a{display:flex;align-items:center;justify-content:center;min-height:44px;border:1px solid #57764e;border-radius:10px;color:#eef8ed;background:#203725;text-decoration:none;padding:8px}.stop{background:#842820}.warning,.message{font-size:12px;line-height:1.5;margin-top:14px;color:#ffdd98}.warning ul{margin:5px 0;padding-left:20px}.label{font-size:13px;fill:#e8f4df}.target{fill:#ffdb72}.actual{fill:#91f16c}.empty{padding:36px 14px;text-align:center;color:#ffdb9b}
       </style><ha-card>
         <header><h2>☀ ${escape(title)}</h2><span class="status ${fault?'fault':''}">${escape(status)}</span></header>
@@ -143,18 +163,26 @@
         ${this._config.show_controls !== false && this._controlsOpen ? this._controls() : ''}
         ${this._message ? `<div class="message" role="status">${escape(this._message)}</div>` : ''}
       </ha-card>`;
-      this.shadowRoot.querySelector('[data-action="toggle-controls"]')?.addEventListener('click',()=>{this._controlsOpen=!this._controlsOpen;this._signature='';this._render();});
-      this.shadowRoot.querySelector('[data-action="mode"]')?.addEventListener('change',e=>this._call('mode','select','select_option',{option:e.target.value}));
-      this.shadowRoot.querySelector('[data-action="angle"]')?.addEventListener('change',e=>{
-        const state=this._state('local_angle'),value=Number(e.target.value),{min,max}=state.attributes;
-        if(Number.isFinite(value)&&value>=min&&value<=max)this._call('local_angle','number','set_value',{value});
-      });
-      for(const action of ['motor','park','reset','stop'])this.shadowRoot.querySelector(`[data-action="${action}"]`)?.addEventListener('click',()=>{
+      if(!this.shadowRoot.firstChild)this.shadowRoot.innerHTML=html;
+      else {const template=document.createElement('template');template.innerHTML=html;patchChildren(this.shadowRoot,template.content);}
+    }
+    _handleAction(e) {
+      const control=e.target.closest?.('[data-action]');
+      if(!control || control.disabled)return;
+      const action=control.dataset.action;
+      if(e.type==='click') {
+        if(action==='toggle-controls'){this._controlsOpen=!this._controlsOpen;this._signature='';this._render();}
         if(action==='motor')this._call('motor_enable','switch',this._state('motor_enable').state==='on'?'turn_off':'turn_on');
         if(action==='park')this._call('mode','select','select_option',{option:'Park Flat'});
         if(action==='reset')this._call('reset_faults','button','press');
         if(action==='stop')this._call('stop','button','press');
-      });
+      } else if(e.type==='change') {
+        if(action==='mode')this._call('mode','select','select_option',{option:control.value});
+        if(action==='angle') {
+          const state=this._state('local_angle'),value=Number(control.value),{min,max}=state.attributes;
+          if(Number.isFinite(value)&&value>=min&&value<=max)this._call('local_angle','number','set_value',{value});
+        }
+      }
     }
     _scene(actual,requested,error) {
       const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), n=role=>numeric(this._state(role));
@@ -204,15 +232,16 @@
           <radialGradient id="sun"><stop stop-color="#fff6b7"/><stop offset=".5" stop-color="#ffd34b"/><stop offset="1" stop-color="#f2a916"/></radialGradient>
           <linearGradient id="sky"><stop stop-color="${day?'#08170e':'#050b10'}"/><stop offset="1" stop-color="${day?'#0d2418':'#091a1f'}"/></linearGradient>
         </defs>
-        <image class="solar-landscape" href="${escape(landscapeURL)}" x="0" y="0" width="900" height="420" preserveAspectRatio="xMidYMid slice" transform="translate(900 0) scale(-1 1)"/>
-        <rect width="900" height="420" fill="url(#sky)" opacity="${day?.25:.83}"/>
+        <rect width="900" height="420" fill="url(#sky)"/>
+        <path class="solar-background-grid" d="${Array.from({length:24},(_,i)=>`M${i*40} 0V420`).join(' ')} ${Array.from({length:11},(_,i)=>`M0 ${i*40}H900`).join(' ')}" fill="none" stroke="#284647" stroke-width=".6" opacity=".4"/>
+        ${day?'':'<path d="M58 84h2 M231 62h2 M343 100h2 M690 72h2 M804 114h2" stroke="#b8d5d3" stroke-width="2" opacity=".6"/>'}
         <text x="28" y="33" class="label" style="font-size:15px;font-weight:900">${sunLabel}</text><text x="872" y="33" text-anchor="end" class="label" style="font-size:15px;font-weight:900">${escape(mode.toUpperCase())}</text>
         <text x="28" y="53" fill="#c1d9ca" font-size="10">${knownSun?(day?'SEASONAL SUN PATH':'MOON · ILLUSTRATIVE NIGHT ARC'):'CHECK SUN ENTITIES / LOCATION'}${estimateSource?' · '+estimateSource:''}</text>
         <polygon class="solar-light-beam" points="${x},${y} ${c[0].join(',')} ${c[3].join(',')}" opacity="${strength}"/>
         <path class="solar-light-ray" d="M${x} ${y}L${shine.join(' ')}" opacity="${strength}"/>
         ${knownSun&&path?`<path class="solar-orbit-path" d="${path}" fill="none" stroke="${day?'#f8d77d':'#9fbacb'}" stroke-width="2.5" stroke-dasharray="5 12" opacity=".8"/>`:''}
         ${knownSun?day?`<g class="solar-scene-sun" transform="translate(${x} ${y})"><circle r="38" fill="#ffdc68" opacity=".16"/><circle r="15" fill="url(#sun)" stroke="#fff0a4" stroke-width="2"/></g>`:`<g class="solar-scene-moon" transform="translate(${x} ${y})"><circle r="18" fill="#dbe8e0"/><circle cx="8" cy="-6" r="17" fill="#091a1f"/></g>`:''}
-        <g class="solar-ground-rings">${[[240,58],[210,49],[180,40]].map(([rx,ry],i)=>`<ellipse cx="520" cy="338" rx="${rx}" ry="${ry}" fill="none" stroke="${i===1?'#e6ce50':'#70f35f'}" stroke-width="${i===1?2.5:1.5}" opacity="${i===1?.8:.5}"/>`).join('')}<ellipse class="solar-ring-orbit" cx="520" cy="338" rx="225" ry="54" fill="none" stroke="#a1ff72" stroke-width="3" stroke-dasharray="90 320"/></g>
+        <g class="solar-ground-rings">${[[240,58],[210,49],[180,40]].map(([rx,ry],i)=>`<ellipse cx="520" cy="338" rx="${rx}" ry="${ry}" fill="none" stroke="${i===1?'#e6ce50':'#70f35f'}" stroke-width="${i===1?2.5:1.5}" opacity="${i===1?.8:.5}"/>`).join('')}</g>
         <g class="solar-pedestal"><ellipse cx="520" cy="347" rx="64" ry="18" fill="#050d08" stroke="#73d84e" stroke-width="2"/><path d="M467 325V341 Q520 359 573 341V325Z" fill="url(#metal)" stroke="#879858" stroke-width="2"/><ellipse cx="520" cy="325" rx="53" ry="16" fill="#1c301d" stroke="#eedf69" stroke-width="2"/><path d="M503 229L503 324 Q520 334 537 324L537 229Z" fill="url(#metal)" stroke="#afa853" stroke-width="2"/><ellipse cx="520" cy="229" rx="27" ry="12" fill="#465333" stroke="#f4d970" stroke-width="3"/></g>
         ${requested===null?'':`<polygon class="solar-target-panel" points="${points([[-178,-115],[178,-115],[178,115],[-178,115]].map(([x,y])=>project(x,y,requested)))}" fill="#f0bc470e" stroke="#f0bc47" stroke-width="4" stroke-dasharray="12 9" opacity=".35"/>`}
         <polygon points="${points(under)}" fill="#06110c" stroke="#1b3427" stroke-width="3"/><polygon points="${points([c[0],c[1],under[1],under[0]])}" fill="#14291e" stroke="#385847" stroke-width="2.5"/><polygon points="${points([c[1],c[2],under[2],under[1]])}" fill="#0d2117" stroke="#2c4b39" stroke-width="2.5"/>

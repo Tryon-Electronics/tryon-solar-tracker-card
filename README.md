@@ -4,7 +4,7 @@ A Home Assistant dashboard card for Tryon solar trackers. Select one **Actual So
 
 ![Solar tracker daytime card](docs/screenshots/day.png)
 
-The graphics match [Tryon Electronics' live tracker demo](https://tryonelectronics.com/projects/solar-tracker-demo): blue panel cells, gold frame, sun reflection, pedestal, glowing rings, seasonal sun path, a nighttime moon, and a 0° flat / 90° upright gauge. The panel shows the real reported angle. Loading the card does not command movement.
+The graphics use the lightweight ESP32 tracker style: a dark grid, blue panel cells, gold frame, pedestal, seasonal sun path, a nighttime moon, and a 0° flat / 90° upright gauge. The panel shows the real reported angle. There is no landscape image, continuous animation or blur filter. Readings update the existing scene instead of rebuilding the card. Loading the card does not command movement.
 
 ## Install with HACS
 
@@ -20,14 +20,14 @@ Requires Home Assistant **2026.6.0 or newer**, HACS, and tracker entities availa
 
 This is currently a **HACS custom repository**. It is not yet in the default searchable HACS catalog.
 
-HACS installs both the JS module and the landscape image from `dist/`. For normal storage-mode dashboards it also registers the resource. If you use YAML resources or the card is missing from the picker, add this resource once with type **JavaScript module**:
+HACS installs the self-contained JS module from `dist/`. For normal storage-mode dashboards it also registers the resource. If you use YAML resources or the card is missing from the picker, add this resource once with type **JavaScript module**:
 
 ```yaml
 url: /hacsfiles/tryon-solar-tracker-card/tryon-solar-tracker-card.js
 type: module
 ```
 
-If upgrading from a manual installation, replace the old `/local/tryon-solar-tracker-card.js` resource with the HACS resource; avoid registering both. Existing card YAML remains valid. Updates are downloaded through HACS, followed by a browser reload.
+If upgrading from a manual installation, replace the old `/local/tryon-solar-tracker-card.js` resource with the HACS resource; avoid registering both. Existing card YAML remains valid. Updates are downloaded through HACS, followed by a browser reload. To get the latest main-branch update, open the repository in HACS, select **⋮ → Redownload → main**, then refresh each phone/browser. All existing cards use the updated resource; no card YAML changes are needed.
 
 ## Add Solar Array 4
 
@@ -68,16 +68,13 @@ The seasonal illustration uses the tracker's saved location, clock, facing and l
 
 ![Solar tracker nighttime card](docs/screenshots/night.png)
 
-Screenshots use sample Home Assistant states; the card itself displays live tracker readings. Graphics are served locally with the card, without external image requests.
+Screenshots use sample Home Assistant states; the card itself displays live tracker readings. The scene is drawn locally in SVG and makes no image requests.
 
 ## Manual installation
 
-Download both files from the release's `dist/` folder into your Home Assistant `config/www/` directory:
+Download `dist/tryon-solar-tracker-card.js` into your Home Assistant `config/www/` directory.
 
-- `tryon-solar-tracker-card.js`
-- `solar-landscape-v1.png`
-
-Add `/local/tryon-solar-tracker-card.js?v=0.3.1` as a JavaScript module resource, then reload. Both files must remain together. If you just created `www`, restart Home Assistant once.
+Add `/local/tryon-solar-tracker-card.js?v=0.4.0` as a JavaScript module resource, then reload. If you just created `www`, restart Home Assistant once.
 
 ## Development and releases
 
@@ -92,7 +89,7 @@ npm test
 
 Edit `src/card.js` and run the build to regenerate the self-contained module in `dist/`. The solar helper is scoped to the card. Tests use mocked Home Assistant states and service calls, covering device selection, renamed and ambiguous entities, real angle geometry, seasonal/night behavior, safety status, controls and mobile layout. No tests send commands to hardware.
 
-Before publishing a release, update the version, rebuild and pass CI. Create a GitHub release with a `v` version tag. Keep the JS and PNG together in the tagged `dist/` folder. **Do not attach a standalone JS release asset**: HACS prioritizes it over `dist/`, which would omit the image. HACS downloads the full tagged `dist/` directory.
+Before publishing a release, update the version, rebuild and pass CI. The built JS module is self-contained; it does not require accompanying images.
 
 Report problems through [GitHub Issues](https://github.com/Tryon-Electronics/tryon-solar-tracker-card/issues), including Home Assistant/HACS versions and any unresolved entity names. Never include API keys, passwords or tokens.
 

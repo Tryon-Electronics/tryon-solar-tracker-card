@@ -1,14 +1,9 @@
-# v0.3.0 — HACS card with website graphics
+# v0.4.0 — Lightweight ESP32-style scene
 
-Install through HACS as a custom **Dashboard** repository:
-https://github.com/Tryon-Electronics/tryon-solar-tracker-card
+Replaces the landscape background with the ESP32-style dark grid. Removes continuous ray/ring animations and SVG blur filters. Keeps panel geometry, sun/moon paths, countdowns, readings and controls.
 
-Select one Actual Solar Angle entity to discover that tracker’s readings and controls. The basic view includes Controls, Settings and an always-accessible Stop Panel button. Controls start collapsed.
+Telemetry updates patch existing text and SVG attributes rather than replacing the full card. Changes to Home Assistant state timestamps alone no longer trigger a redraw. No bitmap asset is required; the HACS package is one self-contained JS module.
 
-The scene matches the website and displays reported panel angles, seasonal sunlight and sunrise/flat-target countdowns. Both the JS module and landscape image are bundled together in dist.
+Existing card configurations remain valid. In HACS, open Tryon Solar Tracker Card and select **⋮ → Redownload → main**, then refresh the browser or reopen the Home Assistant app. The update applies to all cards; no tracker firmware installation is needed.
 
-Requires Home Assistant 2026.6.0+. Uses existing ESPHome entities; MQTT and other custom cards are not required.
-
-Validation: HACS validation and mocked browser tests passed in GitHub Actions. The tests do not send commands to hardware. A real Home Assistant HACS installation has not yet been tested.
-
-Maintainer: create a GitHub release tagged v0.3.0 from main with this description. Leave release assets empty so HACS installs the full dist folder, including the landscape image.
+Validation uses mocked Home Assistant readings and commands, including four cards on a narrow phone viewport. No test commands reach real hardware. Actual phone performance depends on the device and other dashboard cards.
