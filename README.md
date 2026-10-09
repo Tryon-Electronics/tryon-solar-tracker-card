@@ -54,6 +54,49 @@ controls_expanded: false
 
 Examples for [Array 2](examples/solar-array-2.yaml) and [Array 4](examples/solar-array-4.yaml) are included. `show_controls: false` hides the controls for a display-only card; Home Assistant user permissions still apply.
 
+## Custom top-right label and templates
+
+Select a sensor in **Entity overrides → Tracking Status** to show a different
+reading in the top-right badge. Its `unit_of_measurement` is included automatically:
+
+```yaml
+type: custom:tryon-solar-tracker-card
+entity: sensor.solar_array_0_actual_solar_angle
+show_controls: true
+status: sensor.totals_pv_power
+```
+
+This displays `6535 W` when the sensor's value is `6535` and its unit is `W`.
+Unknown/unavailable readings are not presented as valid measurements.
+
+For custom formatting, use **Status template (optional)** in the visual editor,
+or add a `status_template` containing a Home Assistant Jinja template:
+
+```yaml
+type: custom:tryon-solar-tracker-card
+entity: sensor.solar_array_0_actual_solar_angle
+show_controls: true
+status: sensor.totals_pv_power
+status_template: >-
+  {{ states('sensor.totals_pv_power') ~ ' ' ~
+     (state_attr('sensor.totals_pv_power', 'unit_of_measurement') or '') }}
+```
+
+Use `~` to join text, and `or ''` for an absent unit. You can also use `entity`
+in the template for the selected status sensor, and `tracker_entity` for the
+card's Actual Solar Angle sensor. For example, `PV {{ states(entity) }} W`.
+An empty template field returns to entity mode. A nonempty template replaces
+the normal label; units are not added a second time to template output.
+
+Templates are rendered by Home Assistant over its
+[native template subscription](https://github.com/home-assistant/frontend/blob/dev/src/data/ws-templates.ts).
+Home Assistant pushes dependency changes; the card does not poll templates on
+every tracker update. Subscriptions are replaced when configuration changes
+and cleaned up when the card leaves the dashboard. Output is plain escaped
+text, not HTML. Invalid templates show an error and recover when rendering
+succeeds. Existing angle-unavailable, motor-fault, safety-park and motor-disabled
+status messages retain priority over custom labels.
+
 ## What the card shows
 
 - Actual and requested angles, tracking error and status.
@@ -74,7 +117,7 @@ Screenshots use sample Home Assistant states; the card itself displays live trac
 
 Download `dist/tryon-solar-tracker-card.js` into your Home Assistant `config/www/` directory.
 
-Add `/local/tryon-solar-tracker-card.js?v=0.4.1` as a JavaScript module resource, then reload. If you just created `www`, restart Home Assistant once.
+Add `/local/tryon-solar-tracker-card.js?v=0.5.0` as a JavaScript module resource, then reload. If you just created `www`, restart Home Assistant once.
 
 ## Development and releases
 

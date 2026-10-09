@@ -1,4 +1,4 @@
-// Tryon Solar Tracker Card v0.4.1. Edit this source and run scripts/build.py.
+// Tryon Solar Tracker Card v0.5.0. Edit this source and run scripts/build.py.
 (() => {
   /* SOLAR_CYCLE_HELPER */
   const ROLES = {
@@ -83,9 +83,54 @@
       this.shadowRoot.addEventListener('focusout',()=>queueMicrotask(()=>{this._signature='';this._render();}));
     }
     connectedCallback() {
+      this._syncStatusTemplate();
       if(!this._timer)this._timer=setInterval(()=>{if(!document.hidden)this._tickCountdown();},1000);
     }
-    disconnectedCallback() { clearInterval(this._timer);this._timer=null; }
+    disconnectedCallback() { clearInterval(this._timer);this._timer=null;this._clearStatusTemplate(); }
+    _clearStatusTemplate() {
+      const session=this._statusTemplate;
+      this._statusTemplate=null;
+      if(session){session.active=false;this._unsubscribeTemplate(session);}
+    }
+    _unsubscribeTemplate(session) {
+      if(!session.unsubscribe)return;
+      const unsubscribe=session.unsubscribe;session.unsubscribe=null;
+      try {Promise.resolve(unsubscribe()).catch(()=>{});}catch(_){}
+    }
+    _syncStatusTemplate() {
+      const template=this._config?.status_template?.trim();
+      const connection=this._hass?.connection;
+      if(!this.isConnected || !template){this._clearStatusTemplate();return;}
+      const variables={entity:this._config.status || this._config.entity,tracker_entity:this._config.entity};
+      const key=JSON.stringify([template,variables]);
+      if(this._statusTemplate?.key===key && this._statusTemplate.connection===connection)return;
+      this._clearStatusTemplate();
+      const session={key,connection,active:true,value:undefined,error:false,unsubscribe:null};
+      this._statusTemplate=session;
+      if(!connection?.subscribeMessage){session.error=true;return;}
+      // Home Assistant evaluates Jinja and pushes changes for its dependencies.
+      // One subscription per card, rather than polling on every sensor update.
+      try {
+        const pending=connection.subscribeMessage(message=>{
+          if(!session.active)return;
+          session.error=Boolean(message.error);
+          session.value=session.error?undefined:String(message.result ?? '');
+          this._render();
+        },{type:'render_template',template,variables,report_errors:true});
+        Promise.resolve(pending).then(unsubscribe=>{
+          session.unsubscribe=unsubscribe;
+          if(!session.active)this._unsubscribeTemplate(session);
+        }).catch(()=>{if(session.active){session.error=true;session.value=undefined;this._render();}});
+      }catch(_){session.error=true;}
+    }
+    _statusLabel() {
+      if(this._statusTemplate?.error)return 'TEMPLATE ERROR';
+      if(this._statusTemplate?.value!==undefined)return this._statusTemplate.value || '—';
+      const state=this._state('status');
+      if(!available(state))return 'STATUS UNAVAILABLE';
+      const unit=state.attributes?.unit_of_measurement;
+      return `${state.state}${unit?' '+unit:''}`;
+    }
     _trackerNow() {
       const epoch=numeric(this._state('epoch'));
       if(epoch===null || epoch<=0)return Date.now();
@@ -121,11 +166,12 @@
       this._sunEvent=events[0] || (homeEvents.length?{type:homeEvents[0][0],at:homeEvents[0][1],browser:true}:null);
     }
     setConfig(config) {
+      if (config.status_template!=null && typeof config.status_template!=='string')throw new Error('Status template must be Jinja template text.');
       if (config.entity && !config.entity.startsWith('sensor.')) throw new Error('Choose the tracker’s Actual Solar Angle sensor.');
       if (config.entity !== this._config?.entity) this._controlsOpen = config.controls_expanded === true;
-      this._config = {...config}; this._signature = ''; this._render();
+      this._config = {...config}; this._signature = ''; this._syncStatusTemplate();this._render();
     }
-    set hass(hass) { this._hass = hass; this._loadRegistry(); this._render(); }
+    set hass(hass) { this._hass = hass; this._syncStatusTemplate();this._loadRegistry(); this._render(); }
     getCardSize() { return 9; }
     getGridOptions() { return {columns:12, min_columns:6}; }
     static getStubConfig(hass, entities) {
@@ -136,15 +182,16 @@
         schema: [
           {name:'entity',required:true,selector:{entity:{domain:'sensor'}}},
           {name:'title',selector:{text:{}}},
+          {name:'status_template',selector:{text:{multiline:true}}},
           {name:'show_controls',selector:{boolean:{}}},
           {name:'controls_expanded',selector:{boolean:{}}},
           {name:'entities',type:'expandable',title:'Entity overrides (optional)',flatten:true,
             schema:Object.entries(ROLES).map(([name,[domain]]) => ({name,selector:{entity:{domain}}}))},
         ],
         computeLabel: field => field.name === 'entity' ? 'Tracker — select its Actual Solar Angle sensor' :
-          field.name === 'title' ? 'Title (optional)' : field.name === 'show_controls' ? 'Show controls' : field.name === 'controls_expanded' ? 'Open controls by default' :
+          field.name === 'status_template' ? 'Status template (optional)' : field.name === 'title' ? 'Title (optional)' : field.name === 'show_controls' ? 'Show controls' : field.name === 'controls_expanded' ? 'Open controls by default' :
           ROLES[field.name]?.[2] || field.name,
-        computeHelper: field => field.name === 'entity' ? 'Related readings and controls are detected on the same device. Use overrides if an entity has been renamed.' : undefined,
+        computeHelper: field => field.name === 'status_template' ? 'Home Assistant Jinja template for the top-right label. Leave empty to use the selected status sensor, including its unit.' : field.name === 'entity' ? 'Related readings and controls are detected on the same device. Use overrides if an entity has been renamed.' : undefined,
       };
     }
     async _loadRegistry() {
@@ -160,7 +207,7 @@
       if (!this._hass || !this._config) return;
       if (!this._busy && ['INPUT','SELECT'].includes(this.shadowRoot.activeElement?.tagName)) return;
       this._ids = resolve(this._config, this._hass, this._registry);
-      const signature = JSON.stringify([this._config, this._ids, this._busy, this._message, this._controlsOpen,
+      const signature = JSON.stringify([this._config, this._ids, this._busy, this._message, this._controlsOpen, this._statusTemplate?.value,this._statusTemplate?.error,
         ...Object.values(this._ids).map(id => {const s=this._hass.states[id];return s?[id,s.state,s.attributes]:null;}),
         [this._hass.states['sun.sun']?.state,this._hass.states['sun.sun']?.attributes]]);
       if (signature === this._signature) return;
@@ -179,7 +226,7 @@
       const status = actual === null ? 'ANGLE UNAVAILABLE' : fault ? 'FAULT — CHECK TRACKER' :
         this._state('safety_park')?.state==='on' ? 'SAFETY PARK / HOLD' :
         this._state('motor_enable')?.state === 'off' ? 'MOTOR DISABLED' :
-        available(this._state('status')) ? this._state('status').state : 'STATUS UNAVAILABLE';
+        this._statusLabel();
       const flags = [['calibrated','Calibrated'],['time_valid','Time valid'],['wind_fresh','Wind fresh'],['at_target','At target']];
       const html = `<style>
         :host{display:block}*{box-sizing:border-box}ha-card{display:block;padding:18px;border-radius:22px;background:linear-gradient(145deg,#14261b,#07100b);color:#eef8ed;font-family:var(--primary-font-family,system-ui)}
@@ -194,6 +241,7 @@
         <div class="metrics">${[['Actual angle',angle(actual)],['Requested angle',angle(requested)],['Tracking error',angle(error)],['Mode',available(mode)?mode.state:'Unavailable']].map(([k,v])=>`<div class="metric"><span>${k}</span><strong>${escape(v)}</strong></div>`).join('')}</div>
         <div class="flags">${flags.map(([role,label])=>`<span class="${this._state(role)?.state==='on'?'':'off'}">${label}: ${this._state(role)?.state==='on'?'yes':this._state(role)?.state==='off'?'no':'unknown'}</span>`).join('')}</div>
         ${missing.length ? `<div class="warning">Some entities are missing or unavailable. Check Entity overrides in the editor.<ul>${missing.map(role=>`<li>${ROLES[role][2]}</li>`).join('')}</ul></div>` : ''}
+        ${this._statusTemplate?.error?'<div class="warning template-warning">Status template could not render. Check the template and Home Assistant connection.</div>':''}
         <div class="toolbar">
           ${this._config.show_controls !== false ? `<button data-action="toggle-controls" aria-expanded="${this._controlsOpen}">${this._controlsOpen?'Hide controls':'Controls'}</button>` : ''}
           ${deviceId ? `<a data-action="settings" href="/config/devices/device/${encodeURIComponent(deviceId)}">Settings</a>` : ''}
