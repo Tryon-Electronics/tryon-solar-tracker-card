@@ -1,4 +1,4 @@
-// Tryon Solar Tracker Card v0.5.0. Edit this source and run scripts/build.py.
+// Tryon Solar Tracker Card v0.5.1. Edit this source and run scripts/build.py.
 (() => {
   const solarEnvironment = {};
 // Browser-only solar estimates (Meeus/NOAA equations); never commands a motor.
@@ -277,16 +277,18 @@ const SolarCycle = solarEnvironment.cycle;
         schema: [
           {name:'entity',required:true,selector:{entity:{domain:'sensor'}}},
           {name:'title',selector:{text:{}}},
-          {name:'status_template',selector:{text:{multiline:true}}},
           {name:'show_controls',selector:{boolean:{}}},
           {name:'controls_expanded',selector:{boolean:{}}},
           {name:'entities',type:'expandable',title:'Entity overrides (optional)',flatten:true,
-            schema:Object.entries(ROLES).map(([name,[domain]]) => ({name,selector:{entity:{domain}}}))},
+            schema:Object.entries(ROLES).flatMap(([name,[domain]]) => [
+              {name,selector:{entity:{domain}}},
+              ...(name==='status' ? [{name:'status_template',selector:{text:{multiline:true}}}] : []),
+            ])},
         ],
         computeLabel: field => field.name === 'entity' ? 'Tracker — select its Actual Solar Angle sensor' :
-          field.name === 'status_template' ? 'Status template (optional)' : field.name === 'title' ? 'Title (optional)' : field.name === 'show_controls' ? 'Show controls' : field.name === 'controls_expanded' ? 'Open controls by default' :
+          field.name === 'status_template' ? 'Tracking Status template (optional)' : field.name === 'title' ? 'Title (optional)' : field.name === 'show_controls' ? 'Show controls' : field.name === 'controls_expanded' ? 'Open controls by default' :
           ROLES[field.name]?.[2] || field.name,
-        computeHelper: field => field.name === 'status_template' ? 'Home Assistant Jinja template for the top-right label. Leave empty to use the selected status sensor, including its unit.' : field.name === 'entity' ? 'Related readings and controls are detected on the same device. Use overrides if an entity has been renamed.' : undefined,
+        computeHelper: field => field.name === 'status_template' ? "Enter a Home Assistant Jinja template for the top-right label. Use states(entity) for the Tracking Status sensor selected above and state_attr(entity, 'unit_of_measurement') for its unit. Leave empty to show that sensor and its unit automatically." : field.name === 'entity' ? 'Related readings and controls are detected on the same device. Use overrides if an entity has been renamed.' : undefined,
       };
     }
     async _loadRegistry() {

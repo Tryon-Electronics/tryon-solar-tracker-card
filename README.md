@@ -69,8 +69,17 @@ status: sensor.totals_pv_power
 This displays `6535 W` when the sensor's value is `6535` and its unit is `W`.
 Unknown/unavailable readings are not presented as valid measurements.
 
-For custom formatting, use **Status template (optional)** in the visual editor,
-or add a `status_template` containing a Home Assistant Jinja template:
+For custom formatting, open the card's **visual editor → Entity overrides
+(optional)**. Select your sensor under **Tracking Status**, then enter your own
+Jinja template in **Tracking Status template (optional)** directly below it:
+
+```jinja
+{{ states(entity) ~ ' ' ~ (state_attr(entity, 'unit_of_measurement') or '') }}
+```
+
+`entity` refers to the sensor selected above, so changing the selection also changes
+which sensor the template reads. You can configure this entirely in the visual
+options. The equivalent YAML configuration is:
 
 ```yaml
 type: custom:tryon-solar-tracker-card
@@ -78,8 +87,8 @@ entity: sensor.solar_array_0_actual_solar_angle
 show_controls: true
 status: sensor.totals_pv_power
 status_template: >-
-  {{ states('sensor.totals_pv_power') ~ ' ' ~
-     (state_attr('sensor.totals_pv_power', 'unit_of_measurement') or '') }}
+  {{ states(entity) ~ ' ' ~
+     (state_attr(entity, 'unit_of_measurement') or '') }}
 ```
 
 Use `~` to join text, and `or ''` for an absent unit. You can also use `entity`

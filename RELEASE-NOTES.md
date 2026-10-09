@@ -1,3 +1,16 @@
+# v0.5.1 — Tracking Status template in visual options
+
+The multiline **Tracking Status template (optional)** field now appears directly
+below the Tracking Status entity selector in **Entity overrides (optional)**.
+Select any sensor and use `entity` in your Jinja template to refer to that sensor.
+No entity name needs to be hardcoded and no YAML editing is required.
+
+Redownload **main** in HACS and refresh Home Assistant to load the updated editor.
+Existing status sensors and templates continue to work.
+
+Validation checks the visual form field order and generic selected-entity template
+subscription, alongside the card's existing mobile and lifecycle browser tests.
+
 # v0.5.0 — Status templates and sensor units
 
 Selected status sensors now display their unit automatically, such as `6535 W`.

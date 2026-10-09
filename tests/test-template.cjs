@@ -10,6 +10,18 @@ const {chromium}=require('playwright');
   await page.route('http://template.test/**',route=>route.request().url().endsWith('.js')?route.fulfill({path:path.join(__dirname,'../dist/tryon-solar-tracker-card.js'),contentType:'text/javascript'}):route.fulfill({contentType:'text/html',body:'<tryon-solar-tracker-card></tryon-solar-tracker-card>'}));
   await page.goto('http://template.test/');
   await page.addScriptTag({url:'http://template.test/card.js',type:'module'});
+  const form=await page.evaluate(()=>{
+   const form=customElements.get('tryon-solar-tracker-card').getConfigForm();
+   const group=form.schema.find(field=>field.name==='entities');
+   return {top:form.schema.map(field=>field.name),flatten:group.flatten,fields:group.schema,
+    label:form.computeLabel({name:'status_template'}),helper:form.computeHelper({name:'status_template'})};
+  });
+  assert(!form.top.includes('status_template'),'template belongs beside status in overrides');
+  assert.equal(form.flatten,true,'visual options save the existing flat configuration');
+  const statusIndex=form.fields.findIndex(field=>field.name==='status');
+  assert.deepEqual(form.fields[statusIndex+1],{name:'status_template',selector:{text:{multiline:true}}},'multiline template follows the selected status entity');
+  assert.equal(form.label,'Tracking Status template (optional)');
+  assert(form.helper.includes('states(entity)'),'helper explains how to use the selected sensor');
   await page.evaluate(async()=>{
    window.states={};
    for(const [domain,suffix,state] of [['sensor','actual_solar_angle','35'],['sensor','requested_solar_angle','42'],['select','tracking_mode','Auto Sun'],['switch','motor_enable','on'],['binary_sensor','motor_fault','off'],['binary_sensor','angle_sensor_fault','off'],['binary_sensor','safety_bus_park_active','off']]) {
@@ -27,7 +39,7 @@ const {chromium}=require('playwright');
   assert.equal(await page.evaluate(()=>subscriptions.length),0,'no subscription needed for entity mode');
   await page.evaluate(()=>{states['sensor.totals_pv_power'].state='unavailable';card.hass=hass;});
   assert.equal(await page.locator('header .status').innerText(),'STATUS UNAVAILABLE','unavailable entity has no invented watts');
-  await page.evaluate(()=>{states['sensor.totals_pv_power'].state='6535';window.template="{{ states('sensor.totals_pv_power') ~ ' ' ~ (state_attr('sensor.totals_pv_power', 'unit_of_measurement') or '') }}";card.setConfig({...config,status_template:template});});
+  await page.evaluate(()=>{states['sensor.totals_pv_power'].state='6535';window.template="{{ states(entity) ~ ' ' ~ (state_attr(entity, 'unit_of_measurement') or '') }}";card.setConfig({...config,status_template:template});});
   assert.deepEqual(await page.evaluate(()=>subscriptions[0].message),{type:'render_template',template:await page.evaluate(()=>template),variables:{entity:'sensor.totals_pv_power',tracker_entity:'sensor.solar_array_0_actual_solar_angle'},report_errors:true});
   await page.evaluate(()=>{window.panel=card.shadowRoot.querySelector('.solar-actual-panel');subscriptions[0].callback({result:'PV 6535 W',listeners:{entities:['sensor.totals_pv_power']}});});
   assert.equal(await page.locator('header .status').innerText(),'PV 6535 W');
