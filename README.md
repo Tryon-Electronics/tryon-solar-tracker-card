@@ -6,6 +6,8 @@ A Home Assistant dashboard card for Tryon solar trackers. Select one **Actual So
 
 The graphics use the lightweight ESP32 tracker style: a dark grid, blue panel cells, gold frame, pedestal, seasonal sun path, a nighttime moon, and a 0° flat / 90° upright gauge. The panel shows the real reported angle. There is no landscape image, continuous animation or blur filter. Readings update the existing scene instead of rebuilding the card. Loading the card does not command movement.
 
+Download the [illustrated HACS Setup and Card Guide (PDF)](https://tryonelectronics.com/downloads/solar-tracker/tryon-solar-tracker-hacs-card-guide.pdf) for installation, visual options, multiple trackers, entity overrides, templates and troubleshooting.
+
 ## Install with HACS
 
 Requires Home Assistant **2026.6.0 or newer**, HACS, and tracker entities available in Home Assistant. No button-card, Mushroom or card-mod dependencies.
