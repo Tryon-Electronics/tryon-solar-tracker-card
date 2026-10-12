@@ -2,11 +2,18 @@
 
 A Home Assistant dashboard card for Tryon solar trackers. Select one **Actual Solar Angle** entity to discover the readings and controls on that same device. Uses the existing **ESPHome integration**; MQTT is not required for this card.
 
+## Setup guide and documentation
+
+**[Open the illustrated HACS Setup and Card Guide (PDF)](https://tryonelectronics.com/downloads/solar-tracker/tryon-solar-tracker-hacs-card-guide.pdf)**
+
+The 12-page guide covers installing HACS and this card, adding one or multiple trackers, visual options, every entity override, PV watts templates, updates and troubleshooting. It includes sample day/night card screenshots.
+
+- [Controller Settings and ESPHome YAML Manual (PDF)](https://tryonelectronics.com/downloads/solar-tracker/tryon-solar-tracker-settings-manual.pdf)
+- [Graphical Wiring and Commissioning Guide (PDF)](https://tryonelectronics.com/downloads/solar-tracker/tryon-solar-tracker-wiring-guide.pdf)
+
 ![Solar tracker daytime card](docs/screenshots/day.png)
 
 The graphics use the lightweight ESP32 tracker style: a dark grid, blue panel cells, gold frame, pedestal, seasonal sun path, a nighttime moon, and a 0° flat / 90° upright gauge. The panel shows the real reported angle. There is no landscape image, continuous animation or blur filter. Readings update the existing scene instead of rebuilding the card. Loading the card does not command movement.
-
-Download the [illustrated HACS Setup and Card Guide (PDF)](https://tryonelectronics.com/downloads/solar-tracker/tryon-solar-tracker-hacs-card-guide.pdf) for installation, visual options, multiple trackers, entity overrides, templates and troubleshooting.
 
 ## Install with HACS
 
