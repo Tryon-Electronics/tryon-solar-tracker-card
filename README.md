@@ -119,7 +119,7 @@ status messages retain priority over custom labels.
 
 - Actual and requested angles, tracking error and status.
 - Calibration, valid time, fresh wind data and fault indicators.
-- A basic view with a **Controls** button to expand tracking mode, local angle, motor enable, Park Flat and Reset Faults. **STOP PANEL** stays accessible in the basic view.
+- A basic view with a **Controls** button to expand tracking mode, local angle, motor enable and Park Flat, with a full-width **Reset Faults** button underneath. **STOP PANEL** stays accessible in the basic view.
 - A **Settings** link opens the selected tracker’s Home Assistant device page. Use its ESPHome/device configuration link for calibration, limits and advanced safety setup. MQTT remains an automation input, not the card’s settings store.
 - A daytime **SUN DOWN IN** countdown to sunset and a nighttime **SUN UP IN** countdown to sunrise. The timer updates once per second without redrawing the scene. Faults and safety holds remain visible in the status header.
 
@@ -135,7 +135,7 @@ Screenshots use sample Home Assistant states; the card itself displays live trac
 
 Download `dist/tryon-solar-tracker-card.js` into your Home Assistant `config/www/` directory.
 
-Add `/local/tryon-solar-tracker-card.js?v=0.5.0` as a JavaScript module resource, then reload. If you just created `www`, restart Home Assistant once.
+Add `/local/tryon-solar-tracker-card.js?v=0.5.2` as a JavaScript module resource, then reload. If you just created `www`, restart Home Assistant once.
 
 ## Development and releases
 

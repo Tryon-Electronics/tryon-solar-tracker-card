@@ -1,3 +1,14 @@
+# v0.5.2 — Full-width Reset Faults control
+
+**Reset Faults** now fills the bottom row of the expanded **Controls** section,
+removing the empty half-row. It calls the selected tracker's existing **Reset
+Motor Fault** button through Home Assistant. Missing or unavailable reset entities
+keep the button disabled; no firmware or card YAML change is required.
+
+Update the card in HACS and reload each browser or phone. For main-branch installs,
+use **Redownload → main**. Browser checks verify the full-width layout, the exact
+selected-device reset command, and unavailable/never-pressed button states.
+
 # v0.5.1 — Tracking Status template in visual options
 
 The multiline **Tracking Status template (optional)** field now appears directly
